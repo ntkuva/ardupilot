@@ -3520,6 +3520,96 @@ function'''
         self.wait_disarmed(timeout=600)
 
         self.progress("Mission OK")
+        
+    def epsilon_baro_test(self):
+        self.context_push()
+        ex = None
+
+        # new lane swtich available only with EK3
+        self.set_parameters({
+            "EK3_ENABLE": 1,
+            "EK2_ENABLE": 0,
+            "AHRS_EKF_TYPE": 3,
+            "EK3_AFFINITY": 15, # enable affinity for all sensors
+            "EK3_IMU_MASK": 3, # use only 2 IMUs
+            "GPS_TYPE2": 1,
+            "SIM_GPS2_DISABLE": 0,
+            "SIM_BARO_COUNT": 2,
+            "SIM_BAR2_DISABLE": 0,
+            "SIM_BARO_HEALTH": 0,
+            "SIM_BAR2_HEALTH": 0
+            # "ARSPD2_TYPE": 2,
+            # "ARSPD2_USE": 1,
+            # "ARSPD2_PIN": 2,
+            # "EK3_SRC1_POSZ": 1,
+            # "EK3_SRC2_POSZ": 1,
+            # "EK3_SRC3_POSZ": 1
+        })
+
+        # some parameters need reboot to take effect
+        self.reboot_sitl()
+
+        self.lane_switches = []
+
+        # add an EKF lane switch hook
+        def statustext_hook(mav, message):
+            if message.get_type() != 'STATUSTEXT':
+                return
+            # example msg: EKF3 lane switch 1
+            if not message.text.startswith("EKF3 lane switch "):
+                return
+            newlane = int(message.text[-1])
+            self.lane_switches.append(newlane)
+        self.install_message_hook(statustext_hook)
+
+        # get flying
+        self.takeoff(300)
+        self.change_mode('CIRCLE')
+
+        try:
+            ###################################################################
+            self.progress("Checking EKF3 Lane Switching trigger from all sensors")
+            ###################################################################
+            self.start_subtest("BAROMETER: Freeze to last measured value")
+            self.context_collect("STATUSTEXT")
+            # create a barometer error by inhibiting any pressure change while changing altitude
+            old_parameter = self.get_parameter("SIM_BARO_FREEZE")
+            self.set_parameter("SIM_BARO_FREEZE", 1)
+            self.set_parameter("SIM_GPS_DISABLE", 1)
+            # self.set_rc(2, 2000)
+            self.wait_statustext(
+                text="EKF3 lane switch",
+                timeout=10,
+                the_function=lambda: self.set_rc(2, 2000),
+                check_context=True)
+            # self.delay_sim_time(10)
+            if len(self.lane_switches) == 0:
+                self.progress("No lane switch")
+                #raise NotAchievedException("Expected lane switch 0, got %s" % str(self.lane_switches[-1]))
+            # Cleanup
+            self.set_rc(2, 1500)
+            
+            self.set_parameter("SIM_BARO_FREEZE", old_parameter)
+            self.set_parameter("SIM_GPS_DISABLE", 0)
+            self.context_clear_collection("STATUSTEXT")
+            self.wait_heading(0, accuracy=10, timeout=60)
+            self.wait_heading(180, accuracy=10, timeout=60)
+            ###################################################################
+            self.disarm_vehicle(force=True)
+
+        except Exception as e:
+            self.print_exception_caught(e)
+            ex = e
+
+        self.remove_message_hook(statustext_hook)
+
+        self.context_pop()
+
+        # some parameters need reboot to take effect
+        self.reboot_sitl()
+
+        if ex is not None:
+            raise ex
 
     def tests(self):
         '''return list of all tests'''
@@ -3789,6 +3879,10 @@ function'''
             ("HIGH_LATENCY2",
              "Set sending of HIGH_LATENCY2",
              self.HIGH_LATENCY2),
+
+            ("EpsilonBaroTest",
+             "Test for Epsilon Project",
+             self.epsilon_baro_test),
         ])
         return ret
 
