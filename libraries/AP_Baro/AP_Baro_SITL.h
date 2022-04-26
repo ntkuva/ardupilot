@@ -16,7 +16,7 @@ public:
 
 protected:
 
-    void update_healthy_flag(uint8_t instance) override { _frontend.sensors[instance].healthy = healthy(instance); };
+    void update_healthy_flag(uint8_t instance) override;
 
 private:
     uint8_t _instance;

@@ -136,6 +136,18 @@ void AP_Baro_SITL::_timer()
     _has_sample = true;
 }
 
+void AP_Baro_SITL::update_healthy_flag(uint8_t instance)
+{ 
+    if(_sitl->baro[instance].use_health)
+    {
+        return AP_Baro_Backend::update_healthy_flag(instance);
+    }
+    else
+    {
+        _frontend.sensors[instance].healthy = healthy(instance);
+    }
+};
+
 // unhealthy if baro is turned off or beyond supported instances
 bool AP_Baro_SITL::healthy(uint8_t instance) 
 {

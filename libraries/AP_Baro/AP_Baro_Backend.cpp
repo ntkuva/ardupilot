@@ -16,6 +16,8 @@ void AP_Baro_Backend::update_healthy_flag(uint8_t instance)
     }
     WITH_SEMAPHORE(_sem);
 
+    auto last_healthy = _frontend.sensors[instance].healthy;
+    
     // consider a sensor as healthy if it has had an update in the
     // last 0.5 seconds and values are non-zero and have changed within the last 2 seconds
     const uint32_t now = AP_HAL::millis();
@@ -31,6 +33,14 @@ void AP_Baro_Backend::update_healthy_flag(uint8_t instance)
         // so SPI sensors which have no data validity checking can
         // mark a sensor unhealthy
         _frontend.sensors[instance].healthy = false;
+    }
+
+    if(last_healthy != _frontend.sensors[instance].healthy)
+    {
+        if(_frontend.sensors[instance].healthy)
+            printf("barometer %d now healthy\n", instance);
+        else
+            printf("barometer %d now unhealthy\n", instance);
     }
 }
 
@@ -52,7 +62,7 @@ void AP_Baro_Backend::_copy_to_frontend(uint8_t instance, float pressure, float 
     uint32_t now = AP_HAL::millis();
 
     // check for changes in data values
-    if (!is_equal(_frontend.sensors[instance].pressure, pressure) || !is_equal(_frontend.sensors[instance].temperature, temperature)) {
+    if (!is_equal(_frontend.sensors[instance].pressure, pressure) && !is_equal(_frontend.sensors[instance].temperature, temperature)) {
         _frontend.sensors[instance].last_change_ms = now;
     }
 

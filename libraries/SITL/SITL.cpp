@@ -313,12 +313,13 @@ const AP_Param::GroupInfo SIM::BaroParm::var_info[] = {
     AP_GROUPINFO("GLITCH",   4, SIM::BaroParm,  glitch, 0),
     AP_GROUPINFO("FREEZE",   5, SIM::BaroParm,  freeze, 0),
     AP_GROUPINFO("DELAY",    6, SIM::BaroParm,  delay, 0),
+    AP_GROUPINFO("HEALTH", 7, SIM::BaroParm, use_health, 0),
 
     // wind coeffients
-    AP_GROUPINFO("WCF_FWD", 7,  SIM::BaroParm, wcof_xp, 0.0),
-    AP_GROUPINFO("WCF_BAK", 8,  SIM::BaroParm, wcof_xn, 0.0),
-    AP_GROUPINFO("WCF_RGT", 9,  SIM::BaroParm, wcof_yp, 0.0),
-    AP_GROUPINFO("WCF_LFT", 10, SIM::BaroParm, wcof_yn, 0.0),
+    AP_GROUPINFO("WCF_FWD", 8,  SIM::BaroParm, wcof_xp, 0.0),
+    AP_GROUPINFO("WCF_BAK", 9,  SIM::BaroParm, wcof_xn, 0.0),
+    AP_GROUPINFO("WCF_RGT", 10,  SIM::BaroParm, wcof_yp, 0.0),
+    AP_GROUPINFO("WCF_LFT", 11, SIM::BaroParm, wcof_yn, 0.0),
     AP_GROUPEND
 };
 
