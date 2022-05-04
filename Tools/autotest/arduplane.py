@@ -3536,7 +3536,7 @@ function'''
                 "SIM_BARO_COUNT": 2,
                 "SIM_BAR2_DISABLE": 0,
                 "SIM_BARO_HEALTH": 1,
-                "SIM_BAR2_HEALTH": 1
+                "SIM_BAR2_HEALTH": 1,
             })
 
         def setParametersForHealth(self):
@@ -3552,7 +3552,7 @@ function'''
                 "SIM_BARO_COUNT": 2,
                 "SIM_BAR2_DISABLE": 0,
                 "SIM_BARO_HEALTH": 1,
-                "SIM_BAR2_HEALTH": 1
+                "SIM_BAR2_HEALTH": 1,
             })
 
         def runBaroFaultTest(self, setParameters, param, value):
@@ -3577,8 +3577,8 @@ function'''
             #     self.lane_switches.append(newlane)
             # self.install_message_hook(statustext_hook)
             
-            self.delay_sim_time(1)
-            self.wait_ready_to_arm()
+            # self.delay_sim_time(1)
+            #self.wait_ready_to_arm()
 
             # get flying
             self.takeoff(300)
@@ -3591,17 +3591,28 @@ function'''
                 self.start_subtest("BAROMETER: Test setting " + param + " to " + str(value))
                 self.context_collect("STATUSTEXT")
 
+
+                # self.set_parameter("SIM_GPS_DISABLE", 1)
                 # create a barometer fault by setting
                 old_parameter = self.get_parameter(param)
                 self.set_parameter(param, value)
 
-                self.set_rc(2, 2000)
+                #self.change_altitude(200)
+
                 # self.wait_statustext(
                 #     text="EKF3 lane switch",
                 #     timeout=10,
                 #     the_function=lambda: self.set_rc(2, 2000),
                 #     check_context=True)
-                time.sleep(5)
+                self.set_rc(2, 2500)
+                self.delay_sim_time(5)
+                self.set_rc(2, 1500)
+                self.delay_sim_time(5)
+                self.set_rc(2, 2500)
+                self.delay_sim_time(5)
+                self.set_rc(2, 1500)
+                self.delay_sim_time(5)
+                self.set_rc(2, 2500)
 
                 if len(self.lane_switches) == 0:
                     self.progress("No lane switch")
@@ -3610,6 +3621,7 @@ function'''
                 self.set_rc(2, 1500)
                 
                 self.set_parameter(param, old_parameter)
+                # self.set_parameter("SIM_GPS_DISABLE", 0)
 
                 #self.context_clear_collection("STATUSTEXT")
                 self.wait_heading(0, accuracy=10, timeout=60)
