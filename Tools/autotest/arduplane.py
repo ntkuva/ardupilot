@@ -3522,8 +3522,11 @@ function'''
         self.progress("Mission OK")
         
     def epsilon_baro_test(self):
+        # times to inject faults
+        STARTUP = 0
+        IN_CIRCLE = 1
 
-        def setParametersForAffinity(self):
+        def set_affinity_params(self):
             # new lane swtich available only with EK3
             self.set_parameters({
                 "EK3_ENABLE": 1,
@@ -3533,13 +3536,14 @@ function'''
                 "EK3_IMU_MASK": 3, # use only 2 IMUs
                 "GPS_TYPE2": 1,
                 "SIM_GPS2_DISABLE": 0,
-                "SIM_BARO_COUNT": 2,
+                "SIM_BARO_COUNT": 3,
                 "SIM_BAR2_DISABLE": 0,
                 "SIM_BARO_HEALTH": 1,
                 "SIM_BAR2_HEALTH": 1,
+                "BARO_TMR_THRESH" : 0,
             })
 
-        def setParametersForHealth(self):
+        def set_no_affinity_params(self):
             # new lane swtich available only with EK3
             self.set_parameters({
                 "EK3_ENABLE": 1,
@@ -3549,81 +3553,60 @@ function'''
                 "EK3_IMU_MASK": 3, # use only 2 IMUs
                 "GPS_TYPE2": 1,
                 "SIM_GPS2_DISABLE": 0,
-                "SIM_BARO_COUNT": 2,
+                "SIM_BARO_COUNT": 3,
                 "SIM_BAR2_DISABLE": 0,
                 "SIM_BARO_HEALTH": 1,
                 "SIM_BAR2_HEALTH": 1,
+                "BARO_TMR_THRESH" : 0,
             })
 
-        def runBaroFaultTest(self, setParameters, param, value):
-            #self.context_push()
-            ex = None
+        def set_tmr_params(self):
+            # new lane swtich available only with EK3
+            self.set_parameters({
+                "EK3_ENABLE": 1,
+                "EK2_ENABLE": 0,
+                "AHRS_EKF_TYPE": 3,
+                "EK3_AFFINITY": 0, # disable affinity for all sensors
+                "EK3_IMU_MASK": 3, # use only 2 IMUs
+                "GPS_TYPE2": 1,
+                "SIM_GPS2_DISABLE": 0,
+                "SIM_BARO_COUNT": 3,
+                "SIM_BAR2_DISABLE": 0,
+                "SIM_BARO_HEALTH": 1,
+                "SIM_BAR2_HEALTH": 1,
+                "BARO_TMR_THRESH" : 5,
+            })
 
-            setParameters(self)
+        def run_baro_fault_test(self, set_parameters, fault_param, fault_value, fault_time):
+            self.start_subtest("BAROMETER: Test setting " + fault_param + " to " + str(fault_value))
+
+            old_parameter = self.get_parameter(fault_param)
+            
+            if(fault_time == STARTUP):
+                self.set_parameter(fault_param, fault_value)
+
+            set_parameters(self)
 
             # some parameters need reboot to take effect
             self.reboot_sitl()
 
-            self.lane_switches = []
-
-            # add an EKF lane switch hook
-            # def statustext_hook(mav, message):
-            #     if message.get_type() != 'STATUSTEXT':
-            #         return
-            #     # example msg: EKF3 lane switch 1
-            #     if not message.text.startswith("EKF3 lane switch "):
-            #         return
-            #     newlane = int(message.text[-1])
-            #     self.lane_switches.append(newlane)
-            # self.install_message_hook(statustext_hook)
-            
-            # self.delay_sim_time(1)
-            #self.wait_ready_to_arm()
-
-            # get flying
-            self.takeoff(300)
-            self.change_mode('CIRCLE')
-
             try:
-                ###################################################################
-                self.progress("Checking EKF3 Lane Switching trigger from all sensors")
-                ###################################################################
-                self.start_subtest("BAROMETER: Test setting " + param + " to " + str(value))
-                self.context_collect("STATUSTEXT")
+                # get flying
+                self.takeoff(300)
+                self.change_mode('CIRCLE')
 
+                # create a barometer fault by setting parameter
+                if(fault_time == IN_CIRCLE):
+                    self.set_parameter(fault_param, fault_value)
 
-                # self.set_parameter("SIM_GPS_DISABLE", 1)
-                # create a barometer fault by setting
-                old_parameter = self.get_parameter(param)
-                self.set_parameter(param, value)
+                for i in range(0, 5):
+                    self.set_rc(2, 2500)
+                    self.delay_sim_time(5)
+                    self.set_rc(2, 1500)
+                    self.delay_sim_time(5)
 
-                #self.change_altitude(200)
+                self.set_parameter(fault_param, old_parameter)
 
-                # self.wait_statustext(
-                #     text="EKF3 lane switch",
-                #     timeout=10,
-                #     the_function=lambda: self.set_rc(2, 2000),
-                #     check_context=True)
-                self.set_rc(2, 2500)
-                self.delay_sim_time(5)
-                self.set_rc(2, 1500)
-                self.delay_sim_time(5)
-                self.set_rc(2, 2500)
-                self.delay_sim_time(5)
-                self.set_rc(2, 1500)
-                self.delay_sim_time(5)
-                self.set_rc(2, 2500)
-
-                if len(self.lane_switches) == 0:
-                    self.progress("No lane switch")
-                    #raise NotAchievedException("Expected lane switch 0, got %s" % str(self.lane_switches[-1]))
-                # Cleanup
-                self.set_rc(2, 1500)
-                
-                self.set_parameter(param, old_parameter)
-                # self.set_parameter("SIM_GPS_DISABLE", 0)
-
-                #self.context_clear_collection("STATUSTEXT")
                 self.wait_heading(0, accuracy=10, timeout=60)
                 self.wait_heading(180, accuracy=10, timeout=60)
                 ###################################################################
@@ -3632,27 +3615,27 @@ function'''
 
             except Exception as e:
                 self.print_exception_caught(e)
-                ex = e
+                return
 
-            # self.remove_message_hook(statustext_hook)
+        # Drift
+        run_baro_fault_test(self, set_affinity_params, "SIM_BARO_DRIFT", 1, STARTUP)
+        run_baro_fault_test(self, set_no_affinity_params, "SIM_BARO_DRIFT", 1, STARTUP)
+        run_baro_fault_test(self, set_tmr_params, "SIM_BARO_DRIFT", 1, STARTUP)
 
-            
-            #self.context_pop()
-            # self.reboot_sitl()
-
-            if ex is not None:
-                raise e
-        
-        # Frozen Value
-        runBaroFaultTest(self, setParametersForAffinity, "SIM_BARO_FREEZE", 1)
-        runBaroFaultTest(self, setParametersForHealth, "SIM_BARO_FREEZE", 1)
+        # Freeze
+        run_baro_fault_test(self, set_affinity_params, "SIM_BARO_FREEZE", 1, IN_CIRCLE)
+        run_baro_fault_test(self, set_no_affinity_params, "SIM_BARO_FREEZE", 1, IN_CIRCLE)
+        run_baro_fault_test(self, set_tmr_params, "SIM_BARO_FREEZE", 1, IN_CIRCLE)
 
         # Glitch
-        runBaroFaultTest(self, setParametersForAffinity, "SIM_BARO_GLITCH", 50)
-        runBaroFaultTest(self, setParametersForHealth, "SIM_BARO_GLITCH", 50)
+        run_baro_fault_test(self, set_affinity_params, "SIM_BARO_GLITCH", 50, IN_CIRCLE)
+        run_baro_fault_test(self, set_no_affinity_params, "SIM_BARO_GLITCH", 50, IN_CIRCLE)
+        run_baro_fault_test(self, set_tmr_params, "SIM_BARO_GLITCH", 50, IN_CIRCLE)
 
         # Random
-        #
+        run_baro_fault_test(self, set_affinity_params, "SIM_BARO_RND", 10, IN_CIRCLE)
+        run_baro_fault_test(self, set_no_affinity_params, "SIM_BARO_RND", 10, IN_CIRCLE)
+        run_baro_fault_test(self, set_tmr_params, "SIM_BARO_RND", 10, STARTUP)
 
     def tests(self):
         '''return list of all tests'''

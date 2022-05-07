@@ -289,6 +289,8 @@ private:
     AP_Int8                            _filter_range;  // valid value range from mean value
     AP_Int32                           _baro_probe_ext;
 
+    AP_Int32                           _tmrThresholdMeters; // enable tmr and set threshold
+
     // semaphore for API access from threads
     HAL_Semaphore                      _rsem;
 

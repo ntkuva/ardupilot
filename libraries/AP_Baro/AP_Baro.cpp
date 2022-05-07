@@ -52,6 +52,8 @@
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_Logger/AP_Logger.h>
 
+#include "tmr.h"
+
 #define INTERNAL_TEMPERATURE_CLAMP 35.0f
 
 #ifndef HAL_BARO_FILTER_DEFAULT
@@ -220,6 +222,14 @@ const AP_Param::GroupInfo AP_Baro::var_info[] = {
     AP_SUBGROUPINFO(sensors[2].wind_coeff, "3_WCF_", 20, AP_Baro, WindCoeff),
 #endif
 #endif
+
+    // @Param: _TMR
+    // @DisplayName: TMR Threshold
+    // @Description: This enables TMR and sets threshold for outlier
+    // @Units: m
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("_TMR_THRESH", 21, AP_Baro, _tmrThresholdMeters, 0),
 
     AP_GROUPEND
 };
@@ -843,7 +853,12 @@ void AP_Baro::update(void)
 {
     WITH_SEMAPHORE(_rsem);
 
+    static int tmr_health = -1;
+    static int tmr_health_count = 0;
+    static int tmr_health_filtered = -1;
     auto last_primary = _primary;
+    auto last_tmr_health = tmr_health;
+    int numHealthySensors = 0;
 
     if (fabsf(_alt_offset - _alt_offset_active) > 0.01f) {
         // If there's more than 1cm difference then slowly slew to it via LPF.
@@ -881,6 +896,23 @@ void AP_Baro::update(void)
             if (sensors[i].alt_ok) {
                 sensors[i].altitude = altitude + _alt_offset_active;
             }
+
+            numHealthySensors++;
+        }
+    }
+
+    if(_tmrThresholdMeters > 0 && numHealthySensors == BARO_MAX_INSTANCES)
+    {
+        std::vector<float> altitudes = {sensors[0].altitude, sensors[1].altitude, sensors[2].altitude};
+        tmr_health = tmr<float>(altitudes, _tmrThresholdMeters);
+
+        // track how many times tmr_health was the same value.
+        (tmr_health == last_tmr_health) ? tmr_health_count++ :  tmr_health_count = 0;
+
+        if(tmr_health_count >= 2 && tmr_health_filtered != tmr_health)
+        {
+            printf("updated tmr health to %d @%f\n", tmr_health, AP_HAL::millis()/1000.0);
+            tmr_health_filtered = tmr_health;
         }
     }
 
@@ -890,12 +922,12 @@ void AP_Baro::update(void)
     }
 
     // choose primary sensor
-    if (_primary_baro >= 0 && _primary_baro < _num_sensors && healthy(_primary_baro)) {
+    if (_primary_baro >= 0 && _primary_baro < _num_sensors && healthy(_primary_baro) && tmr_health_filtered != _primary_baro) {
         _primary = _primary_baro;
     } else {
         _primary = 0;
         for (uint8_t i=0; i<_num_sensors; i++) {
-            if (healthy(i)) {
+            if (healthy(i) && tmr_health_filtered != i) {
                 _primary = i;
                 break;
             }
@@ -904,7 +936,7 @@ void AP_Baro::update(void)
 
     if(last_primary != _primary)
     {
-        printf("updated primary barometer from %d to %d @%d\n", last_primary, _primary, AP_HAL::millis());
+        printf("updated primary barometer from %d to %d @%f\n", last_primary, _primary, AP_HAL::millis()/1000.0);
     }
 
     // logging
